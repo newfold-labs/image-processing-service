@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount your code for hot reloading during development
+      - .:/app
+      # Mount a directory for processed images (optional)
+      - ./storage:/app/storage
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    # Restart policy
+    restart: unless-stopped
+    # Keep container running for development
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

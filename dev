@@ -1,0 +1,227 @@
+#!/bin/bash
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Project name
+PROJECT_NAME="newfold-image-processing-api"
+
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Help function
+show_help() {
+    echo "🚀 $PROJECT_NAME Development Script"
+    echo ""
+    echo "Usage: ./dev <command> [options]"
+    echo ""
+    echo "Commands:"
+    echo "  init     - Initialize project (copy .env.example to .env)"
+    echo "  up       - Start all services"
+    echo "    --listen, -l    Start with live logs (press Ctrl+C to stop watching)"
+    echo "  down     - Stop all services"
+    echo "  restart  - Restart all services (down + up)"
+    echo "  clean    - Remove all containers, volumes, images, orphans"
+    echo "  logs     - Show container logs"
+    echo "  status   - Show running containers"
+    echo "  shell    - Open shell in app container"
+    echo "  help     - Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  ./dev init"
+    echo "  ./dev up"
+    echo "  ./dev up --listen     # Start with live logs"
+    echo "  ./dev up -l           # Same as above (short flag)"
+    echo "  ./dev logs"
+}
+
+# Initialize project
+init_project() {
+    print_status "Initializing $PROJECT_NAME..."
+    
+    # Check if .env already exists
+    if [ -f ".env" ]; then
+        print_warning ".env file already exists!"
+        read -p "Do you want to overwrite it? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_status "Keeping existing .env file"
+            return 0
+        fi
+    fi
+    
+    # Check if .env.example exists
+    if [ ! -f ".env.example" ]; then
+        print_error ".env.example file not found!"
+        return 1
+    fi
+    
+    # Copy .env.example to .env
+    cp .env.example .env
+    print_success ".env file created from .env.example"
+    print_warning "Don't forget to update the API_TOKENS in .env with your actual tokens!"
+    
+    # Create storage directory if it doesn't exist
+    if [ ! -d "storage" ]; then
+        mkdir -p storage
+        touch storage/.gitkeep
+        print_success "Storage directory created"
+    fi
+    
+    print_success "Project initialized! Run './dev up' to start services."
+}
+
+# Start services
+start_services() {
+    local listen_mode=false
+    
+    # Check for listen flag
+    if [[ "$2" == "--listen" ]] || [[ "$2" == "-l" ]]; then
+        listen_mode=true
+    fi
+    
+    print_status "Starting $PROJECT_NAME services..."
+    
+    # Check if .env exists
+    if [ ! -f ".env" ]; then
+        print_error ".env file not found! Run './dev init' first."
+        return 1
+    fi
+    
+    if [ "$listen_mode" = true ]; then
+        print_status "Starting in listen mode (showing logs)..."
+        print_warning "Press Ctrl+C to stop watching logs (services will keep running)"
+        docker-compose up --build
+    else
+        docker-compose up --build -d
+        
+        if [ $? -eq 0 ]; then
+            print_success "Services started successfully!"
+            print_status "API available at: http://localhost:8000"
+            print_status "API docs available at: http://localhost:8000/docs"
+            echo ""
+            print_status "Run './dev logs' to see container logs"
+            print_status "Run './dev status' to see running containers"
+            print_status "Run './dev up --listen' to start with live logs"
+        else
+            print_error "Failed to start services"
+            return 1
+        fi
+    fi
+}
+
+# Stop services
+stop_services() {
+    print_status "Stopping $PROJECT_NAME services..."
+    docker-compose down
+    
+    if [ $? -eq 0 ]; then
+        print_success "Services stopped successfully!"
+    else
+        print_error "Failed to stop services"
+        return 1
+    fi
+}
+
+# Restart services
+restart_services() {
+    print_status "Restarting $PROJECT_NAME services..."
+    stop_services
+    if [ $? -eq 0 ]; then
+        start_services
+    fi
+}
+
+# Clean services
+clean_services() {
+    print_warning "This will remove everything form this service"
+    read -p "Are you sure? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_status "Clean operation cancelled"
+        return 0
+    fi
+    
+    print_status "Cleaning up $PROJECT_NAME..."
+    
+    # Stop and remove containers, networks, volumes, and orphans
+    docker-compose down --volumes --rmi all --remove-orphans
+    
+    print_success "Cleanup completed!"
+}
+
+# Show logs
+show_logs() {
+    print_status "Showing logs for $PROJECT_NAME..."
+    docker-compose logs -f
+}
+
+# Show status
+show_status() {
+    print_status "Container status:"
+    docker-compose ps
+    echo ""
+    print_status "Docker system info:"
+    docker system df
+}
+
+# Open shell in app container
+open_shell() {
+    print_status "Opening shell in app container..."
+    docker-compose exec app bash
+}
+
+# Main script logic
+case "$1" in
+    "init")
+        init_project
+        ;;
+    "up")
+        start_services "$1" "$2"
+        ;;
+    "down")
+        stop_services
+        ;;
+    "restart")
+        restart_services
+        ;;
+    "clean")
+        clean_services
+        ;;
+    "logs")
+        show_logs
+        ;;
+    "status")
+        show_status
+        ;;
+    "shell")
+        open_shell
+        ;;
+    "help"|"")
+        show_help
+        ;;
+    *)
+        print_error "Unknown command: $1"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac
