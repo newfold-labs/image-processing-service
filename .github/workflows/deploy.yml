@@ -21,39 +21,91 @@ jobs:
         password: ${{ secrets.DROPLET_PASSWORD }}
         key: ${{ secrets.DROPLET_SSH_PRIVATE_KEY }}
         script: |
+          # Set variables
+          PROJECT_DIR="/home/deploy/image-processing-api"
+          REPO_URL="https://github.com/${{ github.repository }}.git"
+          
+          # Show current deployment info
+          echo "🔄 Starting deployment..."
+          echo "📂 Target directory: $PROJECT_DIR"
+          echo "📋 Repository: $REPO_URL"
+          
+          # Create and setup project directory
+          if [ ! -d "$PROJECT_DIR" ]; then
+            echo "📁 Creating project directory..."
+            mkdir -p "$PROJECT_DIR"
+            echo "📥 Cloning repository..."
+            git clone "$REPO_URL" "$PROJECT_DIR"
+          else
+            echo "📂 Project directory exists, updating..."
+          fi
+          
           # Navigate to project directory
-          cd /home/deploy/image-processing-api
+          cd "$PROJECT_DIR"
+          
+          # Show current deployment info
+          echo "🌿 Current branch: $(git branch --show-current 2>/dev/null || echo 'detached')"
+          echo "📋 Current commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'none')"
           
           # Pull latest changes
-          git pull origin main
+          echo "📥 Pulling latest changes..."
+          git fetch origin
+          git reset --hard origin/main
+          
+          # Show new deployment info
+          echo "✅ Updated to commit: $(git rev-parse --short HEAD)"
           
           # Create/update .env file with production values
+          echo "⚙️ Updating environment configuration..."
           cat > .env << EOF
           API_TOKENS=${{ secrets.API_AUTH_TOKEN }}
           APP_ENV=production
           LOG_LEVEL=info
+          DEPLOYMENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          DEPLOYMENT_SHA=${{ github.sha }}
           EOF
           
           # Deploy with Docker Compose
-          echo "Stopping containers..."
-          docker-compose down
+          echo "🐳 Stopping existing containers..."
+          docker-compose down 2>/dev/null || echo "No containers to stop"
           
-          echo "Building and starting containers..."
+          echo "🏗️ Building and starting new containers..."
           docker-compose up --build -d
           
-          # Wait a moment for containers to start
-          sleep 10
+          # Wait for containers to start
+          echo "⏳ Waiting for containers to start..."
+          sleep 15
           
-          # Show status
-          echo "Container status:"
+          # Show container status
+          echo "📊 Container status:"
           docker-compose ps
           
           # Test the deployment
-          echo "Testing deployment..."
-          curl -f http://localhost:8000/ || echo "Health check failed"
+          echo "🩺 Testing deployment..."
+          for i in {1..5}; do
+            if curl -f http://localhost:8000/; then
+              echo "✅ Health check passed!"
+              break
+            else
+              echo "⚠️ Health check failed, attempt $i/5"
+              sleep 5
+            fi
+          done
+          
+          # Show container logs (last 20 lines)
+          echo "📋 Recent container logs:"
+          docker-compose logs --tail=20
+          
+          # Restart nginx to ensure everything is connected (with error handling)
+          echo "🔄 Reloading nginx..."
+          if sudo systemctl reload nginx 2>/dev/null; then
+            echo "✅ Nginx reloaded successfully"
+          else
+            echo "⚠️ Could not reload nginx (may need sudo configuration)"
+          fi
+          
+          echo ""
+          echo "🎉 Deployment completed successfully!"
           
           # Restart nginx to ensure everything is connected
           systemctl reload nginx
-          
-          echo "Deployment completed successfully!"
-          echo "API is available at: https://img-processing.hiive.cloud"
