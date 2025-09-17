@@ -1,8 +1,8 @@
 name: Deploy to DO
 
 on:
-  push:
-    branches: [ main ]
+  release:
+    types: [published]
   workflow_dispatch:
 
 jobs:
@@ -58,7 +58,7 @@ jobs:
           # Create/update .env file with production values
           echo "⚙️ Updating environment configuration..."
           cat > .env << EOF
-          API_TOKENS=${{ secrets.API_AUTH_TOKEN }}
+          API_AUTH_TOKEN=${{ secrets.API_AUTH_TOKEN }}
           APP_ENV=production
           LOG_LEVEL=info
           DEPLOYMENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -106,6 +106,3 @@ jobs:
           
           echo ""
           echo "🎉 Deployment completed successfully!"
-          
-          # Restart nginx to ensure everything is connected
-          systemctl reload nginx
