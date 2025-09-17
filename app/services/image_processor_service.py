@@ -28,9 +28,11 @@ class ImageProcessorService:
         """
         with WandImage(filename=input_path) as img:
             # Apply trim if requested
+            # Equivalent to -fuzz 5% -trim +repage
             if trim:
-                img.trim()
-                img.reset_coords()  # +repage equivalent
+                fuzz_value = 0.05 * img.quantum_range
+                img.trim(fuzz=fuzz_value)
+                img.page = (0, 0, 0, 0)
             
             # Apply resize if requested
             if resize_width and resize_height:
