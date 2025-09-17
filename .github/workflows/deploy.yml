@@ -1,0 +1,59 @@
+name: Deploy to DO
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v0.1.8
+      with:
+        host: ${{ secrets.DROPLET_HOST }}
+        username: ${{ secrets.DROPLET_USER }}
+        password: ${{ secrets.DROPLET_PASSWORD }}
+        key: ${{ secrets.DROPLET_SSH_PRIVATE_KEY }}
+        script: |
+          # Navigate to project directory
+          cd /home/deploy/image-processing-api
+          
+          # Pull latest changes
+          git pull origin main
+          
+          # Create/update .env file with production values
+          cat > .env << EOF
+          API_TOKENS=${{ secrets.API_AUTH_TOKEN }}
+          APP_ENV=production
+          LOG_LEVEL=info
+          EOF
+          
+          # Deploy with Docker Compose
+          echo "Stopping containers..."
+          docker-compose down
+          
+          echo "Building and starting containers..."
+          docker-compose up --build -d
+          
+          # Wait a moment for containers to start
+          sleep 10
+          
+          # Show status
+          echo "Container status:"
+          docker-compose ps
+          
+          # Test the deployment
+          echo "Testing deployment..."
+          curl -f http://localhost:8000/ || echo "Health check failed"
+          
+          # Restart nginx to ensure everything is connected
+          systemctl reload nginx
+          
+          echo "Deployment completed successfully!"
+          echo "API is available at: https://img-processing.hiive.cloud"
