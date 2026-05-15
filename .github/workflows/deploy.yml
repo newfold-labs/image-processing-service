@@ -12,9 +12,9 @@ permissions: {}
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     permissions:
-      contents: read # Required for actions/checkout to clone the private repo.
+      contents: read # Required to checkout the private repo.
 
     steps:
     - name: Checkout code
